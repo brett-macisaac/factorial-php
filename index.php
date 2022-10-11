@@ -16,7 +16,7 @@
     
     <body>
         
-        <h1>Factorial Calculator</h1>
+        <h1>Factorial Calculator (CI Test)</h1>
         
         <form id = "frmFactorial" method = "get" action = "factorial.php">
             <!-- Textbox for entering a number. -->
