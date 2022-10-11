@@ -42,9 +42,10 @@ stages:
       workingDirectory: $(rootFolder)
       displayName: 'Use PHP version $(phpVersion)'
 
-    - script: composer install --no-interaction --prefer-dist
-      workingDirectory: $(rootFolder)
-      displayName: 'Composer install'
+    # Disable for now, as there's no 'composer.json' file with which to run this script.
+    # - script: composer install --no-interaction --prefer-dist
+    #   workingDirectory: $(rootFolder)
+    #   displayName: 'Composer install'
 
     - task: ArchiveFiles@2
       displayName: 'Archive files'
