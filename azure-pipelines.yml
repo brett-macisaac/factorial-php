@@ -8,21 +8,26 @@ trigger:
 
 variables:
   # Azure Resource Manager connection created during pipeline creation
-  azureSubscription: 'eb7de0f6-bf19-4d1d-9658-ca2bd01ee9f5'
+  azure_subscription: 'eb7de0f6-bf19-4d1d-9658-ca2bd01ee9f5'
 
-  # Web app name
-  webAppName: 'factorial-php'
+  # CI Web app name.
+  web_app_ci_server: 'factorial-php'
+
+  # Staging Web app name.
+  web_app_prod_server: 'factorial-php-prod'
 
   # Agent VM image name
-  vmImageName: 'ubuntu-latest'
+  vm_image_name: 'ubuntu-latest'
 
   # Environment name
-  environmentName: 'factorial-php'
+  environment_name: 'factorial-php'
 
-  # Root folder under which your composer.json file is available.
-  rootFolder: $(System.DefaultWorkingDirectory)
+  # Root folder.
+  root_folder: $(System.DefaultWorkingDirectory)
 
 stages:
+
+# Build the web app.
 - stage: Build
   displayName: Build stage
   variables:
@@ -30,7 +35,7 @@ stages:
   jobs:
   - job: BuildJob
     pool:
-      vmImage: $(vmImageName)
+      vmImage: $(vm_image_name)
     steps:
     - script: |
         sudo update-alternatives --set php /usr/bin/php$(phpVersion)
@@ -39,19 +44,25 @@ stages:
         sudo update-alternatives --set php-cgi /usr/bin/php-cgi$(phpVersion)
         sudo update-alternatives --set phar.phar /usr/bin/phar.phar$(phpVersion)
         php -version
-      workingDirectory: $(rootFolder)
+      workingDirectory: $(root_folder)
       displayName: 'Use PHP version $(phpVersion)'
+
+    # Just to see what the root directory is for future reference.
+    - script: |
+        echo  '$(root_folder)'
+        ls
+      displayName: 'Output root directory.'
 
     # Disable for now, as there's no 'composer.json' file with which to run this script.
     # - script: composer install --no-interaction --prefer-dist
-    #   workingDirectory: $(rootFolder)
+    #   workingDirectory: $(root_folder)
     #   displayName: 'Composer install'
 
     - task: ArchiveFiles@2
       displayName: 'Archive files'
       inputs:
-        rootFolderOrFile: '$(rootFolder)'
-        includeRootFolder: false
+        root_folderOrFile: '$(root_folder)'
+        includeroot_folder: false
         archiveType: zip
         archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
         replaceExistingArchive: true
@@ -60,15 +71,19 @@ stages:
       displayName: 'Upload package'
       artifact: drop
 
-- stage: Deploy
-  displayName: 'Deploy Web App'
+# Deploy the web app to CI server.
+- stage: DeployToCIServer
+  displayName: 'Deploy Web App to CI Server'
+
+  # Deployment to CI can only occur if the Build stage succeeded.
   dependsOn: Build
   condition: succeeded()
+
   jobs:
   - deployment: DeploymentJob
     pool:
-      vmImage: $(vmImageName)
-    environment: $(environmentName)
+      vmImage: $(vm_image_name)
+    environment: $(environment_name)
     strategy:
       runOnce:
         deploy:
@@ -76,6 +91,92 @@ stages:
           - task: AzureWebApp@1
             displayName: 'Deploy Azure Web App : factorial-php'
             inputs:
-              azureSubscription: $(azureSubscription)
-              appName: $(webAppName)
+              azureSubscription: $(azure_subscription)
+              appName: $(web_app_ci_server)
               package: $(Pipeline.Workspace)/drop/$(Build.BuildId).zip
+
+# Run tests on the web app that was just deployed to the CI server.
+# https://stackoverflow.com/questions/69075735/running-python-script-containing-selenium-from-azure-pipelines-not-able-to-loca
+# https://www.codewrecks.com/post/old/2018/11/run-python-test-with-azure-devops-pipeline/
+# https://learn.microsoft.com/en-us/azure/devops/pipelines/ecosystems/python?view=azure-devops
+- stage: Test
+  displayName: 'Test Web App'
+
+  # Testing can only occur if the web app was succeessfully deployed to CI server.
+  dependsOn: DeployToCIServer
+  condition: succeeded()
+
+  jobs:
+
+  - job: TestJob
+
+    pool:
+      vmImage: $(vm_image_name)
+
+    steps:
+
+    # Specify the Python version to use.
+    - task: UsePythonVersion@0
+      displayName: 'Use Python 3.x'
+
+    # Check google chrome version.
+    - script: |
+        google-chrome --version
+      displayName: 'Check Google Chrome Version.'
+
+    # Download Chrome Driver (necessary for Selenium).
+    - script: |
+        pwd
+        wget https://chromedriver.storage.googleapis.com/106.0.5249.61/chromedriver_linux64.zip
+        unzip chromedriver_linux64.zip
+        ls
+        sudo mv chromedriver /bin/chromedriver
+        ls
+      displayName: 'Download Chrome Driver.'
+
+    # Install Python packages.
+    - script: |
+        python -m pip install --upgrade pip 
+        pip install pytest
+        pip install pytest-cov
+        pip install pytest-xdist
+        pip install pytest-bdd
+        pip install selenium
+      displayName: 'Install necessary Python packages.'
+
+    # Run testing script.
+    - script: |
+        pytest $(root_folder)/test/test_script.py --junitxml=$(root_folder)/test/test_results.xml
+      displayName: 'Run testing Script.'
+
+    # Publish Results (not sure what exactly this does. see https://learn.microsoft.com/en-us/azure/devops/pipelines/ecosystems/python?view=azure-devops).
+    # There should be away to make the stage fail if the test results contain at least one failed test. Maybe it does this.
+    - task: PublishTestResults@2
+      condition: succeededOrFailed()
+      inputs:
+        testResultsFiles: '$(root_folder)/test/test_results.xml'
+        testRunTitle: 'Publish test results.'
+
+# Deploy the web app to prod server (hasn't been made yet).
+# - stage: DeployToProdServer
+#   displayName: 'Deploy Web App to Production Server'
+
+#   # Deployment to production can only occur if the Test stage succeeded.
+#   dependsOn: Test
+#   condition: succeeded()
+
+#   jobs:
+#   - deployment: DeploymentJob
+#     pool:
+#       vmImage: $(vm_image_name)
+#     environment: $(environment_name)
+#     strategy:
+#       runOnce:
+#         deploy:
+#           steps:
+#           - task: AzureWebApp@1
+#             displayName: 'Deploy Azure Web App : factorial-php-prod'
+#             inputs:
+#               azureSubscription: $(azure_subscription)
+#               appName: $(factorial-php-prod)
+#               package: $(Pipeline.Workspace)/drop/$(Build.BuildId).zip
