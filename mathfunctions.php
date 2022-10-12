@@ -12,7 +12,7 @@
         {
             if ($n == floor($n)) // If an integer (floor function removes decimals).
             {
-                if ($n > 0) // If $n is positive.
+                if ($n >= 0) // If $n is positive.
                 {
                     return true;
                 }
