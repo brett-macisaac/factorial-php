@@ -10,6 +10,7 @@ import selenium_utils as SU
 def driver():
     # The URL to the web app.
     l_url = "https://factorial-php.azurewebsites.net"
+    #l_url = "https://factorialcalculator.azurewebsites.net"
 
     # Options for the browser.
     l_chrome_options = webdriver.ChromeOptions()
@@ -84,4 +85,4 @@ def test_0(driver, xpath_txt_factorial, xpath_btn_calculate):
     driver.back()
     time.sleep(2)
 
-    assert l_result == "1"
+    assert l_result == "0! is 1."

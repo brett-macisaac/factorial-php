@@ -1,33 +1,23 @@
-# PHP as Linux Web App on Azure
 # Build, package and deploy your PHP project to Azure Linux Web App.
 # Add steps that run tests and more:
 # https://docs.microsoft.com/azure/devops/pipelines/languages/php
-
 trigger:
 - master
 
 variables:
+
   # Azure Resource Manager connection created during pipeline creation
   azure_subscription: 'eb7de0f6-bf19-4d1d-9658-ca2bd01ee9f5'
-
-  # CI Web app name.
-  web_app_ci_server: 'factorial-php'
-
-  # Staging Web app name.
-  web_app_prod_server: 'factorial-php-prod'
-
+  # Web app name
+  web_app_name: 'factorial-php'
   # Agent VM image name
   vm_image_name: 'ubuntu-latest'
-
   # Environment name
   environment_name: 'factorial-php'
-
-  # Root folder.
+  # Root folder under which your composer.json file is available.
   root_folder: $(System.DefaultWorkingDirectory)
 
 stages:
-
-# Build the web app.
 - stage: Build
   displayName: Build stage
   variables:
@@ -36,7 +26,9 @@ stages:
   - job: BuildJob
     pool:
       vmImage: $(vm_image_name)
+
     steps:
+
     - script: |
         sudo update-alternatives --set php /usr/bin/php$(phpVersion)
         sudo update-alternatives --set phar /usr/bin/phar$(phpVersion)
@@ -47,38 +39,27 @@ stages:
       workingDirectory: $(root_folder)
       displayName: 'Use PHP version $(phpVersion)'
 
-    # Just to see what the root directory is for future reference.
-    - script: |
-        echo  '$(root_folder)'
-        ls
-      displayName: 'Output root directory.'
-
     # Disable for now, as there's no 'composer.json' file with which to run this script.
     # - script: composer install --no-interaction --prefer-dist
-    #   workingDirectory: $(root_folder)
+    #   workingDirectory: $(rootFolder)
     #   displayName: 'Composer install'
 
     - task: ArchiveFiles@2
       displayName: 'Archive files'
       inputs:
-        root_folderOrFile: '$(root_folder)'
-        includeroot_folder: false
+        rootFolderOrFile: '$(root_folder)'
+        includeRootFolder: false
         archiveType: zip
         archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
         replaceExistingArchive: true
-
     - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
       displayName: 'Upload package'
       artifact: drop
 
-# Deploy the web app to CI server.
-- stage: DeployToCIServer
-  displayName: 'Deploy Web App to CI Server'
-
-  # Deployment to CI can only occur if the Build stage succeeded.
+- stage: DeployToCI
+  displayName: 'Deploy Web App'
   dependsOn: Build
   condition: succeeded()
-
   jobs:
   - deployment: DeploymentJob
     pool:
@@ -92,7 +73,7 @@ stages:
             displayName: 'Deploy Azure Web App : factorial-php'
             inputs:
               azureSubscription: $(azure_subscription)
-              appName: $(web_app_ci_server)
+              appName: $(web_app_name)
               package: $(Pipeline.Workspace)/drop/$(Build.BuildId).zip
 
 # Run tests on the web app that was just deployed to the CI server.
@@ -103,7 +84,7 @@ stages:
   displayName: 'Test Web App'
 
   # Testing can only occur if the web app was succeessfully deployed to CI server.
-  dependsOn: DeployToCIServer
+  dependsOn: DeployToCI
   condition: succeeded()
 
   jobs:
