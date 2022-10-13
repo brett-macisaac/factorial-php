@@ -2,8 +2,8 @@
 # Add steps that run tests and more:
 # https://docs.microsoft.com/azure/devops/pipelines/languages/php
 
-# trigger:
-# - master
+trigger:
+- none
 
 variables:
 

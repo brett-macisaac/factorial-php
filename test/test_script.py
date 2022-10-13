@@ -1,6 +1,7 @@
 import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.common import exceptions as SeleniumExceptions
 import time
 
 import selenium_utils as SU
@@ -25,8 +26,14 @@ def driver():
     l_driver = webdriver.Chrome(chrome_options = l_chrome_options)
 
     # Go to web application's page.
-    l_driver.set_page_load_timeout(100)
-    l_driver.get(l_url)
+    l_driver.set_page_load_timeout(10)
+    while True:
+        try:
+            l_driver.get(l_url)
+        except SeleniumExceptions.TimeoutException:
+            continue
+
+        break
 
     l_driver.maximize_window()
 
